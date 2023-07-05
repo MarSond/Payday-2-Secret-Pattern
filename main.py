@@ -26,11 +26,16 @@ target = cropped_plate.copy()
 target = cv2.cvtColor(target, cv2.COLOR_GRAY2BGR)
 ############ Match symbols
 
-for key, values in cipher.test_mapping.items():
-	best_loc, best_match_val, best_rotation, best_scale = cipher.get_best_match(plate=cropped_plate, key=key)
-	target = tools.draw_found_rect(target, best_loc, best_scale, best_rotation)
-	cv2.putText(target, key, best_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
-	pass
+matches_threshold = 0.4  # You can adjust this threshold
+for key, values in cipher.mapping.items():
+    matches = cipher.get_all_matches_above_threshold(plate=cropped_plate, key=key, threshold=matches_threshold)
+    
+    for match in matches:
+        scale, rotation, loc = match['scale'], match['rotation'], match['location']
+        target = tools.draw_found_rect(target, loc, scale, rotation)
+        cv2.putText(target, key, loc, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+
+
 
 ###################
 tools.show_image(target, "Matched symbols", logging.WARNING, 2)

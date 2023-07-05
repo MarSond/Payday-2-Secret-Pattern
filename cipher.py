@@ -3,8 +3,8 @@ import numpy as np
 import image_tools as tools
 from config import *
 
-scales = [0.25] #np.linspace(0.20, 0.6, 60)
-rotations = np.arange(-10, 10, 1)
+scales = [0.25]#np.linspace(0.15, 0.6, 60)
+rotations = [0]#np.arange(-15, 15, 3)
 
 cipher_image = cv2.imread("cipher-text.jpg", cv2.IMREAD_GRAYSCALE)
 plate_image = cv2.imread("plate.png")	
@@ -85,16 +85,40 @@ def generate_cipher_overview():
 		cv2.putText(overview_image, key, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255, 1, cv2.LINE_AA)
 	return overview_image
 
+
 def get_cipher_image(im_coords):
 	x, y = im_coords
 	output = cipher_image[y:y+CIPHER_HEIGHT, x:x+CIPHER_WIDTH]
 	_, output = cv2.threshold(output, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 	return output
 
-def _match(input, pattern):
+def _match(input, pattern, threshold):
 	result = cv2.matchTemplate(input, pattern, cv2.TM_CCOEFF_NORMED)
-	_, max_val, _, max_loc = cv2.minMaxLoc(result)
-	return max_val, max_loc
+	locations = np.where(result >= threshold)
+	return zip(*locations)
+
+def get_all_matches_above_threshold(plate, key, threshold=0.8):
+	search_image_raw = get_cipher_image(mapping[key])
+	search_image = search_image_raw.copy()
+	all_matches = [] # This will store all the matches above threshold
+
+	for scale in scales:
+		# Resize the template
+		resized_template = cv2.resize(search_image, (int(search_image.shape[1]*scale), int(search_image.shape[0]*scale)))
+		
+		# Loop over the rotations
+		for angle in rotations:
+			# Rotate the template
+			rotation_matrix = cv2.getRotationMatrix2D((resized_template.shape[1]//2, resized_template.shape[0]//2), angle, 1)
+			rotated_template = cv2.warpAffine(resized_template, rotation_matrix, (resized_template.shape[1], resized_template.shape[0]))
+			locations = _match(plate, rotated_template, threshold)
+			
+			# If current match value is above the threshold, add it to all_matches list
+			for loc in locations:
+				match_info = {'scale': scale, 'rotation': angle, 'location': loc}
+				all_matches.append(match_info)
+
+	return all_matches
 
 def get_best_match(plate, key):
 	search_image_raw = get_cipher_image(mapping[key])
