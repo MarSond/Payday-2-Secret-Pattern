@@ -3,7 +3,36 @@ import cv2
 import logging
 import cipher as cipher
 import random
+from config import *
 
+def draw_found_rect(target, loc, scale, angle):
+	# Define points of the rectangle around the match
+	width = int(CIPHER_WIDTH * scale)
+	height = int(CIPHER_HEIGHT * scale)
+
+	
+	# top-left corner
+	top_left = loc
+	# top-right corner
+	top_right = (top_left[0] + width, top_left[1])
+	# bottom-right corner
+	bottom_right = (top_left[0] + width, top_left[1] + height)
+	# bottom-left corner
+	bottom_left = (top_left[0], top_left[1] + height)
+	
+	# Rotate points
+	center = (loc[0] + width / 2, loc[1] + height / 2)
+	top_left_rot = rotate_point(center, top_left, angle)
+	top_right_rot = rotate_point(center, top_right, angle)
+	bottom_right_rot = rotate_point(center, bottom_right, angle)
+	bottom_left_rot = rotate_point(center, bottom_left, angle)
+	
+	# Convert to integer coordinates
+	rotated_rect_points = np.intp([top_left_rot, top_right_rot, bottom_right_rot, bottom_left_rot])
+	
+	# Draw the rotated rectangle on the original image
+	cv2.polylines(target, [rotated_rect_points], True, (0, 255, 0), 1)
+	return target
 
 def fix_plate_rotation(plate, overview=None):
 	plate = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
@@ -26,7 +55,7 @@ def fix_plate_rotation(plate, overview=None):
 
 def process_cropped_plate(plate):
 	overview = plate.copy()
-	plate = cv2.threshold(plate, 200, 255, cv2.THRESH_BINARY)[1];show_image(plate, "Plate threshold", logging.DEBUG)
+	plate = cv2.threshold(plate, PLATE_THRESH_LOW, PLATE_THRESH_HIGH, cv2.THRESH_BINARY)[1];show_image(plate, "Plate threshold", logging.DEBUG)
 	plate, overview = fix_plate_rotation(plate, overview);show_image(plate, "Plate Rotation fix", logging.DEBUG)
 	plate = cv2.flip(plate, 1);show_image(plate, "Plate flipped", logging.DEBUG)
 	return plate, overview

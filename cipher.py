@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
 import image_tools as tools
+from config import *
 
 scales = np.linspace(0.35, 0.65, 15)
 rotations = np.arange(-25, 25, 5)
-cipher_window_size = (80, 75)
+
 cipher_image = cv2.imread("cipher-text.jpg", cv2.IMREAD_GRAYSCALE)
 plate_image = cv2.imread("plate.png")	
 # start position of top left corner of search window in the image
@@ -58,8 +59,8 @@ mapping = {
 
 def generate_cipher_overview():
 	# Size of overview image (estimate a size that will fit all characters)
-	overview_width = 10 * (cipher_window_size[0] + 50) # 10 characters per row, plus some spacing for text
-	overview_height = int(np.ceil(len(mapping) / 10.0)) * (cipher_window_size[1] + 50)
+	overview_width = 10 * (CIPHER_WIDTH + 50) # 10 characters per row, plus some spacing for text
+	overview_height = int(np.ceil(len(mapping) / 10.0)) * (CIPHER_HEIGHT + 50)
 	overview_image = np.zeros((overview_height, overview_width), dtype=np.uint8)
 
 
@@ -69,24 +70,24 @@ def generate_cipher_overview():
 		
 
 		# Ensure that search_window has the expected shape before assigning
-		if search_window.shape == (cipher_window_size[1], cipher_window_size[0]):
+		if search_window.shape == (CIPHER_HEIGHT, CIPHER_WIDTH):
 			# Position to paste the search_window in the overview_image
 			row = i // 10
 			col = i % 10
-			pos_x = col * (cipher_window_size[0] + 50)
-			pos_y = row * (cipher_window_size[1] + 50)
+			pos_x = col * (CIPHER_WIDTH + 50)
+			pos_y = row * (CIPHER_HEIGHT + 50)
 			# Paste the search window in the overview_image
-			overview_image[pos_y:pos_y+cipher_window_size[1], pos_x:pos_x+cipher_window_size[0]] = search_window
+			overview_image[pos_y:pos_y+CIPHER_HEIGHT, pos_x:pos_x+CIPHER_WIDTH] = search_window
 		else:
 			print(f"Search window for key {key} has incorrect shape: {search_window.shape}")
 		# Put the corresponding key (text) below the search window
-		text_position = (pos_x, pos_y + cipher_window_size[1] + 20)
+		text_position = (pos_x, pos_y + CIPHER_HEIGHT + 20)
 		cv2.putText(overview_image, key, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255, 1, cv2.LINE_AA)
 	return overview_image
 
 def get_cipher_image(im_coords):
 	x, y = im_coords
-	output = cipher_image[y:y+cipher_window_size[1], x:x+cipher_window_size[0]]
+	output = cipher_image[y:y+CIPHER_HEIGHT, x:x+CIPHER_WIDTH]
 	_, output = cv2.threshold(output, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 	return output
 
