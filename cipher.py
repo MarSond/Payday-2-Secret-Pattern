@@ -3,8 +3,8 @@ import numpy as np
 import image_tools as tools
 from config import *
 
-scales = np.linspace(0.35, 0.65, 15)
-rotations = np.arange(-25, 25, 5)
+scales = [0.25] #np.linspace(0.20, 0.6, 60)
+rotations = np.arange(-10, 10, 1)
 
 cipher_image = cv2.imread("cipher-text.jpg", cv2.IMREAD_GRAYSCALE)
 plate_image = cv2.imread("plate.png")	
@@ -96,7 +96,7 @@ def _match(input, pattern):
 	_, max_val, _, max_loc = cv2.minMaxLoc(result)
 	return max_val, max_loc
 
-def get_match(plate, key):
+def get_best_match(plate, key):
 	search_image_raw = get_cipher_image(mapping[key])
 	search_image = search_image_raw.copy()
 	#cv2.imshow(f"raw search_image for {key}", search_image)
@@ -115,18 +115,15 @@ def get_match(plate, key):
 			rotated_template = cv2.warpAffine(resized_template, rotation_matrix, (resized_template.shape[1], resized_template.shape[0]))
 			#cv2.imshow(f"rotated_template for {key} and angle {angle}", rotated_template)
 			curr_val, curr_loc = _match(plate, rotated_template)
-			
 			# Record if this is the best match so far
 			if curr_val > best_match_val:
 				best_match_val = curr_val
 				best_match = (scale, angle, curr_loc)
 				best_template = rotated_template
 
-
 	best_scale, best_rotation, best_loc = best_match
 	print(f"Key: {key}, max_val: {best_match_val} at {best_loc} - rotation: {best_rotation} scale: {best_scale}")
 	return best_loc, best_match_val, best_rotation, best_scale
-
 
 
 def extract_plate(inputImage, crop=False):
