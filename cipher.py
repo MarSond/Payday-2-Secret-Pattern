@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import image_tools as tools
 
 scales = np.linspace(0.35, 0.65, 15)
 rotations = np.arange(-25, 25, 5)
@@ -57,8 +58,8 @@ mapping = {
 
 def generate_cipher_overview():
 	# Size of overview image (estimate a size that will fit all characters)
-	overview_width = 10 * (search_window_size[0] + 50) # 10 characters per row, plus some spacing for text
-	overview_height = int(np.ceil(len(mapping) / 10.0)) * (search_window_size[1] + 50)
+	overview_width = 10 * (cipher_window_size[0] + 50) # 10 characters per row, plus some spacing for text
+	overview_height = int(np.ceil(len(mapping) / 10.0)) * (cipher_window_size[1] + 50)
 	overview_image = np.zeros((overview_height, overview_width), dtype=np.uint8)
 
 
@@ -68,18 +69,18 @@ def generate_cipher_overview():
 		
 
 		# Ensure that search_window has the expected shape before assigning
-		if search_window.shape == (search_window_size[1], search_window_size[0]):
+		if search_window.shape == (cipher_window_size[1], cipher_window_size[0]):
 			# Position to paste the search_window in the overview_image
 			row = i // 10
 			col = i % 10
-			pos_x = col * (search_window_size[0] + 50)
-			pos_y = row * (search_window_size[1] + 50)
+			pos_x = col * (cipher_window_size[0] + 50)
+			pos_y = row * (cipher_window_size[1] + 50)
 			# Paste the search window in the overview_image
-			overview_image[pos_y:pos_y+search_window_size[1], pos_x:pos_x+search_window_size[0]] = search_window
+			overview_image[pos_y:pos_y+cipher_window_size[1], pos_x:pos_x+cipher_window_size[0]] = search_window
 		else:
 			print(f"Search window for key {key} has incorrect shape: {search_window.shape}")
 		# Put the corresponding key (text) below the search window
-		text_position = (pos_x, pos_y + search_window_size[1] + 20)
+		text_position = (pos_x, pos_y + cipher_window_size[1] + 20)
 		cv2.putText(overview_image, key, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255, 1, cv2.LINE_AA)
 	return overview_image
 
@@ -125,16 +126,7 @@ def get_match(plate, key):
 	print(f"Key: {key}, max_val: {best_match_val} at {best_loc} - rotation: {best_rotation} scale: {best_scale}")
 	return best_loc, best_match_val, best_rotation, best_scale
 
-def rotate_image(image, angle):
-	# Get the dimensions of the image
-	h, w = image.shape[:2]
-	# Compute the center of the image
-	cx, cy = w // 2, h // 2
-	# Get the rotation matrix
-	M = cv2.getRotationMatrix2D((cx, cy),-angle, 1.0)
-	# Perform the rotation
-	rotated = cv2.warpAffine(image, M, (w, h))
-	return rotated
+
 
 def extract_plate(inputImage, crop=False):
 	overview = inputImage.copy()
@@ -150,26 +142,11 @@ def extract_plate(inputImage, crop=False):
 	# Cropping
 	cropped = inputImage[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
 	
-	# 90% to white threshhold- set rest to black
-	cropped = cv2.threshold(cropped, 200, 255, cv2.THRESH_BINARY)[1]
-	cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-	lines = cv2.HoughLinesP(cropped, 1, np.pi / 180, 100, minLineLength=30, maxLineGap=20)
-	# Compute the angle of rotation
-	angle = 0
-	if lines is not None:
-		for line in lines:
-			x1, y1, x2, y2 = line[0]
-			overview = cv2.line(overview, (top_left[0]+x1, top_left[1]+y1), (top_left[0]+x2, top_left[1]+y2), (0, 255, 0), 1)
-			angle += np.arctan2(y2 - y1, x2 - x1)
-		# Average angle
-		angle /= len(lines)
+	cropped, crop_overview = tools.process_cropped_plate(cropped)
 	
-	# Convert angle from radians to degrees
-	angle = angle * 180.0 / np.pi
-	
-	# Rotate the image to straighten the text
-	corrected = rotate_image(cropped, -angle)
+	# paste the cropped image overview back into the overview
+	overview[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]] = crop_overview
 
-	overview = cv2.resize(overview, (0,0), fx=0.5, fy=0.5)
+
 	# Return the highlighted overview and the perspective-corrected crop
-	return overview, corrected
+	return overview, cropped
