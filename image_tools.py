@@ -5,7 +5,7 @@ import cipher as cipher
 import random
 from config import *
 
-def draw_found_rect(target, loc, scale, angle, size=(CIPHER_WIDTH, CIPHER_HEIGHT)):
+def draw_found_rect(target, loc, scale, angle=0, size=(CIPHER_WIDTH, CIPHER_HEIGHT)):
 	# Define points of the rectangle around the match
 	width = int(size[0] * scale)
 	height = int(size[1] * scale)
@@ -13,6 +13,8 @@ def draw_found_rect(target, loc, scale, angle, size=(CIPHER_WIDTH, CIPHER_HEIGHT
 	
 	# top-left corner
 	top_left = loc
+	#flip the x and y
+	top_left = (top_left[1], top_left[0])
 	# top-right corner
 	top_right = (top_left[0] + width, top_left[1])
 	# bottom-right corner

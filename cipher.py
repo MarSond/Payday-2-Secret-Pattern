@@ -3,16 +3,13 @@ import numpy as np
 import image_tools as tools
 from config import *
 
-scales = [0.25]#np.linspace(0.15, 0.6, 60)
+scales = [0.30]#np.linspace(0.15, 0.6, 60)
 rotations = [0]#np.arange(-15, 15, 3)
 
 cipher_image = cv2.imread("cipher-text.jpg", cv2.IMREAD_GRAYSCALE)
 plate_image = cv2.imread("plate.png")	
 # start position of top left corner of search window in the image
-test_mapping = {
-	"A": (0,0),
-	"I": (564,0),
-}
+
 mapping = {
 	"A": (0,0),
 	"B": (74,0),
@@ -56,6 +53,10 @@ mapping = {
 	"\'": (1024,184),
 }
 
+test_mapping = {
+	"A": (0,0),
+	"I": (564,0),
+}
 
 def generate_cipher_overview():
 	# Size of overview image (estimate a size that will fit all characters)
@@ -97,30 +98,76 @@ def _match(input, pattern, threshold):
 	locations = np.where(result >= threshold)
 	return zip(*locations)
 
-def get_all_matches_above_threshold(plate, key, threshold=0.8):
+def non_max_suppression(matches, overlapThresh):
+	if len(matches) == 0:
+		return []
+
+	# If the bounding boxes are integers, convert them to floats -- this is important since we'll be doing a bunch of divisions
+	if matches[0]['location'].dtype.kind == "i":
+		matches = [{'location': np.array([float(p) for p in match['location']]), 'scale': match['scale']} for match in matches]
+
+	# initialize the list of picked matches
+	pick = []
+
+	# grab the coordinates of the bounding boxes
+	x1 = np.array([match['location'][0] for match in matches])
+	y1 = np.array([match['location'][1] for match in matches])
+	x2 = np.array([match['location'][0] + 15 for match in matches])  # assuming width is 15
+	y2 = np.array([match['location'][1] + 15 for match in matches])  # assuming height is 15
+
+	# compute the area of the bounding boxes
+	area = (x2 - x1 + 1) * (y2 - y1 + 1)
+
+	# sort the bounding boxes by the bottom-right y-coordinate of the bounding box
+	idxs = np.argsort(y2)
+
+	# keep looping while some indexes still remain in the indexes list
+	while len(idxs) > 0:
+		# grab the last index in the indexes list and add the index value to the list of picked indexes
+		last = len(idxs) - 1
+		i = idxs[last]
+		pick.append(i)
+
+		# find the largest (x, y) coordinates for the start of the bounding box and the smallest (x, y) coordinates for the end of the bounding box
+		xx1 = np.maximum(x1[i], x1[idxs[:last]])
+		yy1 = np.maximum(y1[i], y1[idxs[:last]])
+		xx2 = np.minimum(x2[i], x2[idxs[:last]])
+		yy2 = np.minimum(y2[i], y2[idxs[:last]])
+
+		# compute the width and height of the bounding box
+		w = np.maximum(0, xx2 - xx1 + 1)
+		h = np.maximum(0, yy2 - yy1 + 1)
+
+		# compute the ratio of overlap
+		overlap = (w * h) / area[idxs[:last]]
+
+		# delete all indexes from the index list that have overlap greater than the provided overlap threshold
+		idxs = np.delete(idxs, np.concatenate(([last], np.where(overlap > overlapThresh)[0])))
+
+	# return only the bounding boxes that were picked
+	return [matches[i] for i in pick]
+
+def get_all_matches_above_threshold(input, key, threshold=0.8):
 	search_image_raw = get_cipher_image(mapping[key])
 	search_image = search_image_raw.copy()
-	all_matches = [] # This will store all the matches above threshold
+	all_matches = []  # This will store all the matches above threshold
 
 	for scale in scales:
 		# Resize the template
 		resized_template = cv2.resize(search_image, (int(search_image.shape[1]*scale), int(search_image.shape[0]*scale)))
 		
-		# Loop over the rotations
-		for angle in rotations:
-			# Rotate the template
-			rotation_matrix = cv2.getRotationMatrix2D((resized_template.shape[1]//2, resized_template.shape[0]//2), angle, 1)
-			rotated_template = cv2.warpAffine(resized_template, rotation_matrix, (resized_template.shape[1], resized_template.shape[0]))
-			locations = _match(plate, rotated_template, threshold)
+		locations = _match(input, resized_template, threshold)
 			
-			# If current match value is above the threshold, add it to all_matches list
-			for loc in locations:
-				match_info = {'scale': scale, 'rotation': angle, 'location': loc}
-				all_matches.append(match_info)
+		# If current match value is above the threshold, add it to all_matches list
+		for loc in locations:
 
-	return all_matches
+			match_info = {'location': np.array(loc), 'scale': scale}
+			all_matches.append(match_info)
 
-def get_best_match(plate, key):
+	# Apply non-maxima suppression
+	return non_max_suppression(all_matches, 0.3)
+
+def get_best_match(input, key):
 	search_image_raw = get_cipher_image(mapping[key])
 	search_image = search_image_raw.copy()
 	#cv2.imshow(f"raw search_image for {key}", search_image)
@@ -138,7 +185,7 @@ def get_best_match(plate, key):
 			rotation_matrix = cv2.getRotationMatrix2D((resized_template.shape[1]//2, resized_template.shape[0]//2), angle, 1)
 			rotated_template = cv2.warpAffine(resized_template, rotation_matrix, (resized_template.shape[1], resized_template.shape[0]))
 			#cv2.imshow(f"rotated_template for {key} and angle {angle}", rotated_template)
-			curr_val, curr_loc = _match(plate, rotated_template)
+			curr_val, curr_loc = _match(input, rotated_template)
 			# Record if this is the best match so far
 			if curr_val > best_match_val:
 				best_match_val = curr_val
